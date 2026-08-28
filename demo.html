@@ -381,6 +381,11 @@ $("clock").oninput=function(){S.day=+this.value;paint()};
 $("swK").onchange=function(){S.key=this.checked;paint()};
 $("swE").onchange=function(){S.extend=this.checked;paint()};
 
+/* allow ?step=N so a step can be linked to, or captured */
+var qs=(location.search.match(/[?&]step=(\d+)/)||[])[1];
+if(qs){ si=Math.max(0,Math.min(STEPS.length-1,parseInt(qs,10)-1)); }
+if(/[?&]clean=1/.test(location.search)){ document.querySelector(".tour .nav").style.visibility="hidden"; }
+
 showStep();
 })();
 </script>
