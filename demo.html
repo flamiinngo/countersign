@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Countersign — walk through a dispute</title>
+<meta name="description" content="Four steps. Watch a webhook dispute get settled, then watch it fall apart when the key isn't registered upfront.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;600&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body,h1,h2,h3,p,table{margin:0}
+  button,input,select{font:inherit;color:inherit}
+
+  :root{
+    --ground:#E4E2DC;--card:#F6F5F1;--sunk:#EDEBE5;
+    --ink:#14171A;--muted:#6B7075;--rule:#C9C7C0;--rule-soft:#DEDCD5;
+    --seal:#8C2F39;--seal-bg:#F3E6E7;
+    --ok:#35664F;--ok-bg:#E3EDE7;
+    --warn:#9A6520;--warn-bg:#F5EADB;
+    --display:"Spectral",Georgia,serif;
+    --sans:"Source Sans 3","Helvetica Neue",Arial,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  }
+  html{background:var(--ground)}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15.5px;
+       line-height:1.6;-webkit-font-smoothing:antialiased;padding:26px 24px 70px}
+  .wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+  .lbl{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+         border-bottom:2px solid var(--ink);padding-bottom:13px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:14px}
+  .brand h1{font-family:var(--display);font-weight:600;font-size:34px;line-height:1;letter-spacing:-.01em}
+  .brand .s{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .sim{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--muted)}
+
+  /* narrator */
+  .tour{background:var(--card);border:1px solid var(--ink);padding:24px 28px;
+        display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 38px;align-items:start}
+  .tour .step{grid-column:1;font-family:var(--mono);font-size:9.5px;font-weight:600;
+              letter-spacing:.2em;text-transform:uppercase;color:var(--seal)}
+  .tour h2{grid-column:1;font-family:var(--display);font-weight:600;font-size:29px;line-height:1.15;
+           max-width:28ch}
+  .tour p{grid-column:1;font-size:16px;line-height:1.58;max-width:80ch}
+  .tour p b{font-weight:600}
+  .tour .look{grid-column:1;font-family:var(--mono);font-size:11px;color:var(--seal);
+              border-left:2px solid var(--seal);padding:2px 0 2px 12px}
+  .tour .nav{grid-column:2;grid-row:1 / span 4;display:flex;flex-direction:column;gap:8px;min-width:148px}
+  @media(max-width:900px){.tour{grid-template-columns:1fr}.tour .nav{grid-column:1;grid-row:auto;flex-direction:row}}
+
+  .btn{background:var(--card);border:1px solid var(--ink);color:var(--ink);font-family:var(--mono);
+       font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+       padding:10px 15px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--sunk)}
+  .btn:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+  .btn:disabled{opacity:.3;cursor:not-allowed}
+  .btn.primary{background:var(--seal);border-color:var(--seal);color:#fff}
+  .btn.primary:hover{background:#A03642}
+
+  /* clock */
+  .bar{background:var(--card);border:1px solid var(--rule);padding:12px 18px;
+       display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .bar .lbl{color:var(--seal)}
+  .clockread{font-family:var(--mono);font-size:11.5px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:150px;height:2px;
+                    background:var(--rule);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+    background:var(--seal);cursor:pointer;border-radius:50%}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;background:var(--seal);cursor:pointer;border:0;border-radius:50%}
+  .stats{display:flex;gap:16px;font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stats b{font-weight:600}
+
+  /* split */
+  .split{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);gap:18px;align-items:start}
+  @media(max-width:980px){.split{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--rule)}
+  .card>.head{padding:11px 16px;border-bottom:1px solid var(--rule);display:flex;
+              justify-content:space-between;align-items:center;gap:10px}
+  .card>.head .lbl{color:var(--seal)}
+  .card>.body{padding:16px}
+
+  /* verification panel */
+  .vrow{display:grid;grid-template-columns:22px minmax(0,1fr);gap:11px;padding:11px 0;
+        border-bottom:1px dotted var(--rule);align-items:start}
+  .vrow:last-of-type{border-bottom:0}
+  .vrow .m{font-family:var(--mono);font-size:14px;line-height:1.35;text-align:center}
+  .vrow.ok .m{color:var(--ok)} .vrow.no .m{color:var(--seal)}
+  .vrow .t{display:block;font-family:var(--display);font-weight:600;font-size:15.5px;line-height:1.3}
+  .vrow .d{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.55;margin-top:4px}
+  .verdict{margin-top:14px;padding:14px 16px;border-left:3px solid var(--ok);background:var(--ok-bg);
+           font-size:14.5px;line-height:1.5}
+  .verdict.bad{border-left-color:var(--seal);background:var(--seal-bg)}
+  .verdict .v{font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.16em;
+              text-transform:uppercase;display:block;margin-bottom:6px}
+  .verdict.good .v{color:var(--ok)} .verdict.bad .v{color:var(--seal)}
+
+  /* ledger */
+  .tablewrap{max-height:296px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+  thead th{position:sticky;top:0;background:var(--sunk);text-align:left;font-size:9px;font-weight:600;
+           letter-spacing:.13em;text-transform:uppercase;color:var(--muted);padding:9px 13px;
+           border-bottom:1px solid var(--rule);white-space:nowrap}
+  tbody td{padding:8px 13px;border-bottom:1px solid var(--rule-soft);white-space:nowrap}
+  tbody tr.sel{background:var(--seal-bg)}
+  tbody tr:hover{background:var(--sunk);cursor:pointer}
+  .pill{font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border:1px solid}
+  .pill.s{color:var(--ok);border-color:var(--ok)}
+  .pill.d{color:var(--warn);border-color:var(--warn)}
+  .empty{padding:44px 18px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:11.5px;line-height:1.8}
+  .legend{padding:10px 16px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:10px;
+          color:var(--muted);line-height:1.6}
+
+  /* switch */
+  .swrow{display:flex;flex-wrap:wrap;gap:14px}
+  .swc{flex:1 1 300px;background:var(--card);border:1px solid var(--rule);padding:14px 16px;
+       display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .swc.broken{border-color:var(--seal);background:var(--seal-bg)}
+  .swc .t b{font-family:var(--display);font-weight:600;font-size:16px;display:block}
+  .swc .t span{font-family:var(--mono);font-size:10px;color:var(--muted)}
+  .tg{display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none;flex:none}
+  .tg input{position:absolute;opacity:0;width:0;height:0}
+  .tg .tr{width:36px;height:19px;background:var(--rule);position:relative;transition:background .18s;flex:none}
+  .tg .tr::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;background:#fff;transition:transform .18s}
+  .tg input:checked + .tr{background:var(--seal)}
+  .tg input:checked + .tr::after{transform:translateX(17px)}
+  .tg input:focus-visible + .tr{outline:2px solid var(--seal);outline-offset:2px}
+  .tg .st{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.12em;
+          text-transform:uppercase;color:var(--muted);width:22px}
+
+  footer{border-top:1px solid var(--rule);padding-top:14px;display:flex;gap:24px;flex-wrap:wrap;
+         font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  footer a{color:var(--seal)}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand"><h1>Countersign</h1><span class="s">Walk through a dispute &middot; four steps</span></div>
+    <span class="sim">Simulated records, running in your browser &middot; no network &middot; nothing deployed</span>
+  </header>
+
+  <div class="tour">
+    <div class="step" id="tStep"></div>
+    <h2 id="tHead"></h2>
+    <p id="tBody"></p>
+    <div class="look" id="tLook"></div>
+    <div class="nav">
+      <button class="btn primary" id="next">Next &rarr;</button>
+      <button class="btn" id="back">&larr; Back</button>
+      <button class="btn" id="restart">Restart</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <span class="lbl">Clock</span>
+    <span class="clockread" id="clockRead"></span>
+    <input type="range" id="clock" min="0" max="60" step="1" value="0">
+    <div class="stats">
+      <span>on record <b id="stLive">0</b></span>
+      <span>expired <b id="stExp">0</b></span>
+    </div>
+  </div>
+
+  <div class="split">
+    <div class="card">
+      <div class="head"><span class="lbl">The disputed exchange</span><span class="clockread" id="vId"></span></div>
+      <div class="body" id="vBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="head">
+        <span class="lbl">What is on record</span>
+        <span class="clockread" id="resMeta"></span>
+      </div>
+      <div class="tablewrap">
+        <table><thead><tr>
+          <th>webhookId</th><th>event</th><th>sendProof</th><th>receiptProof</th><th>state</th><th>expires</th>
+        </tr></thead><tbody id="rows"></tbody></table>
+        <div class="empty" id="empty" style="display:none"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <div class="swrow">
+    <div class="swc" id="swcK">
+      <div class="t"><b>ReceiverKey registered upfront</b><span>STEP 0 &middot; THE RECEIVER PUBLISHES ITS SIGNING KEY</span></div>
+      <label class="tg"><input type="checkbox" id="swK" checked><span class="tr"></span><span class="st" id="stK">on</span></label>
+    </div>
+    <div class="swc" id="swcE">
+      <div class="t"><b>Unmatched proofs keep extending</b><span>SILENCE KEEPS EVIDENCE ALIVE</span></div>
+      <label class="tg"><input type="checkbox" id="swE" checked><span class="tr"></span><span class="st" id="stE">on</span></label>
+    </div>
+  </div>
+
+  <footer>
+    <span>Countersign &middot; Other lane</span>
+    <span>Full data model &rarr; <a href="https://github.com/flamiinngo/countersign">github.com/flamiinngo/countersign</a></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var DAY=86400, BASE=1787788800;          // clock day 0
+var SETTLED_WINDOW=30*DAY;               // agreed dispute window for a settled pair
+var EVENTS=["payment.succeeded","order.shipped","subscription.updated","refund.issued","invoice.paid"];
+
+/* ---- seeded records ---- */
+function mul(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var rnd=mul(20260828);
+var REC=[];
+(function(){
+  for(var i=0;i<14;i++){
+    var id="wh_"+(0x4a10+i*7).toString(16);
+    var sent=BASE-Math.floor(rnd()*6*DAY)-3600;
+    // two of them never came back
+    var missing=(i===3||i===9);
+    REC.push({
+      id:id, event:EVENTS[Math.floor(rnd()*EVENTS.length)],
+      sentAt:sent, expectedBy:sent+900,
+      received: missing?null:sent+Math.floor(rnd()*40)+4,
+      ext:0
+    });
+  }
+})();
+var FOCUS=REC[3];                         // the disputed one, used by the inspector
+var INSPECT=REC[0];                       // step 1 & 2 look at a settled one
+
+var S={day:0,key:true,extend:true};
+function now(){return BASE+S.day*DAY}
+function expiresAt(r){
+  if(r.received) return r.received+SETTLED_WINDOW;          // pair expires together
+  return S.extend ? now()+2*DAY : r.sentAt+2*DAY;           // unmatched: renewed, or not
+}
+function alive(r){return expiresAt(r)>now()}
+function fmtLeft(s){
+  if(s<=0)return "—";
+  if(s<DAY)return Math.round(s/3600)+" h";
+  return Math.round(s/DAY)+" d";
+}
+function clockTxt(t){return new Date(t*1000).toISOString().replace("T"," ").slice(0,16)+" UTC"}
+
+/* ---- verification panel ---- */
+function renderInspector(){
+  var r=INSPECT, b=$("vBody");
+  $("vId").textContent=r.id;
+  var rows="";
+
+  rows+=row(S.key,"ReceiverKey on record",
+    S.key ? "registered "+clockTxt(BASE-40*DAY)+" · $creator = the receiver"
+          : "no key was ever registered by the receiver");
+
+  rows+=row(true,"SendProof",
+    "written by the sender at "+clockTxt(r.sentAt)+" · $creator = the sender");
+
+  if(r.received){
+    rows+=row(true,"ReceiptProof",
+      "the receiver's signed response, captured at "+clockTxt(r.received));
+    rows+=row(S.key,"Signature verifies",
+      S.key ? "checks against the key the receiver registered itself"
+            : "there is nothing to check it against");
+  }else{
+    rows+=row(false,"ReceiptProof",
+      "nothing ever came back · the SendProof stands alone");
+  }
+
+  var v;
+  if(!r.received){
+    v='<div class="verdict bad"><span class="v">Unresolved</span>'+
+      'The sender can prove it sent this. Nobody can prove it arrived, because nothing came back to capture. '+
+      'The record stays open, and keeps renewing itself, until somebody settles it.</div>';
+  }else if(S.key){
+    v='<div class="verdict good"><span class="v">Settled</span>'+
+      'Delivered and processed. The receipt carries the receiver’s own signature, and it checks against '+
+      'a key the receiver put on record before any traffic flowed. There is nothing left to argue about.</div>';
+  }else{
+    v='<div class="verdict bad"><span class="v">Cannot be settled</span>'+
+      'The receipt still holds a signature, but no key was ever registered, so it cannot be tied to anyone. '+
+      'The receiver says “that is not our signature” and there is no way to contradict them. '+
+      'You are back to one company’s word against the other’s.</div>';
+  }
+  b.innerHTML=rows+v;
+}
+function row(ok,title,detail){
+  return '<div class="vrow '+(ok?"ok":"no")+'"><span class="m">'+(ok?"✓":"✗")+'</span>'+
+         '<span><span class="t">'+title+'</span><span class="d">'+detail+'</span></span></div>';
+}
+
+/* ---- ledger ---- */
+function renderLedger(){
+  var tb=$("rows"), em=$("empty"), live=0, shown=0, html="";
+  REC.forEach(function(r){ if(alive(r)) live++ });
+  $("stLive").textContent=live;
+  $("stExp").textContent=REC.length-live;
+
+  REC.forEach(function(r){
+    if(!alive(r)) return;
+    shown++;
+    var settled=!!r.received;
+    html+='<tr data-id="'+r.id+'"'+(r.id===INSPECT.id?' class="sel"':'')+'>'+
+      '<td>'+r.id+'</td><td>'+r.event+'</td>'+
+      '<td>✓</td>'+
+      '<td>'+(settled?'✓':'<span style="color:var(--warn)">—</span>')+'</td>'+
+      '<td><span class="pill '+(settled?'s':'d')+'">'+(settled?'settled':'open')+'</span></td>'+
+      '<td>'+fmtLeft(expiresAt(r)-now())+'</td></tr>';
+  });
+  tb.innerHTML=html;
+  $("resMeta").textContent=shown+" of "+REC.length;
+  em.style.display=shown?"none":"block";
+  if(!shown) em.innerHTML="Every record has expired off the query surface.";
+
+  Array.prototype.forEach.call(tb.querySelectorAll("tr"),function(tr){
+    tr.onclick=function(){
+      var id=tr.getAttribute("data-id");
+      REC.forEach(function(r){ if(r.id===id) INSPECT=r });
+      paint();
+    };
+  });
+
+  $("legend").innerHTML = S.extend
+    ? "A settled pair expires together on the agreed window. An open one renews itself, so <b>whatever is still here past its deadline is already the missing set</b>."
+    : "<span style='color:var(--seal)'>Renewal is off, so open records lapse like everything else and the evidence disappears with them.</span>";
+}
+
+function paint(){
+  $("clockRead").textContent=(S.day===0?"today":"today + "+S.day+" d")+"  ·  "+clockTxt(now());
+  $("clock").value=S.day;
+  $("swK").checked=S.key; $("swE").checked=S.extend;
+  $("stK").textContent=S.key?"on":"off"; $("stE").textContent=S.extend?"on":"off";
+  $("swcK").classList.toggle("broken",!S.key);
+  $("swcE").classList.toggle("broken",!S.extend);
+  renderLedger(); renderInspector();
+}
+
+/* ---- the tour ---- */
+var STEPS=[
+ {h:"Two companies, one webhook, two separate records.",
+  b:'One company’s system tells another that something happened. Both halves of that exchange get written down independently: the <b>sender</b> records that it sent, and when a signed response comes back, the receiver’s own signature gets captured and recorded too. Neither company owns the record, and neither can quietly change it afterwards.',
+  look:"Fourteen exchanges on record. Twelve settled. Two never came back.",
+  go:function(){S.key=true;S.extend=true;S.day=0;INSPECT=REC[0]}},
+
+ {h:"So when the receiver says they never got it, there is an answer.",
+  b:'This is the moment the whole thing exists for. The receipt holds the receiver’s <b>own signature</b>, and it checks against a key <b>the receiver put on record before any traffic ever flowed</b>. Not a key the sender chose, not a log the sender kept. Something the receiver committed to itself, in advance, when it had no dispute to win.',
+  look:"Look at the panel on the left. Every line checks, and the exchange is settled.",
+  go:function(){S.key=true;S.extend=true;S.day=0;INSPECT=REC[0]}},
+
+ {h:"Take away step zero, and it all collapses.",
+  b:'I have just switched off the upfront key registration. Everything else is identical — the same webhook, the same captured response, the same signature sitting in the record. But there is no longer anything to tie that signature to the receiver. <b>They say it is not theirs, and nobody can contradict them.</b> One company’s word against the other’s, which is exactly where we started.',
+  look:"The verdict on the left has changed. That single missing write is the whole product.",
+  go:function(){S.key=false;S.extend=true;S.day=0;INSPECT=REC[0]}},
+
+ {h:"Silence is what keeps evidence alive.",
+  b:'Key back on, and I have moved the clock <b>35 days forward</b>. The settled exchanges have expired and dropped off — they were resolved, nobody needs them, and nobody is paying to store them. The two that never came back are <b>still here</b>, still renewing themselves, because nothing ever settled them.<br><br>That is expiry doing real work. You never have to ask which records are the problem. The ones still standing are the problem.',
+  look:"Two records left, both open. Try the second switch to see what happens without renewal.",
+  go:function(){S.key=true;S.extend=true;S.day=35;INSPECT=FOCUS}}
+];
+var si=0;
+function showStep(){
+  var s=STEPS[si];
+  $("tStep").textContent="Step "+(si+1)+" of "+STEPS.length;
+  $("tHead").textContent=s.h;
+  $("tBody").innerHTML=s.b;
+  $("tLook").textContent=s.look;
+  $("back").disabled=si===0;
+  $("next").disabled=si===STEPS.length-1;
+  $("next").textContent=si===STEPS.length-2?"Last step →":"Next →";
+  s.go(); paint();
+}
+
+$("next").onclick=function(){if(si<STEPS.length-1){si++;showStep()}};
+$("back").onclick=function(){if(si>0){si--;showStep()}};
+$("restart").onclick=function(){si=0;showStep()};
+$("clock").oninput=function(){S.day=+this.value;paint()};
+$("swK").onchange=function(){S.key=this.checked;paint()};
+$("swE").onchange=function(){S.extend=this.checked;paint()};
+
+showStep();
+})();
+</script>
+</body>
+</html>
