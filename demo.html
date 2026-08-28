@@ -395,6 +395,43 @@ if(qd!==undefined||qk!==undefined){
   if(qk!==undefined) S.key=(qk==="1");
   paint();
 }
+
+/* ?auto=1 — plays itself on the narration's timing, for capture */
+if(/[?&]auto=1/.test(location.search)){
+  document.querySelector(".tour .nav").style.visibility="hidden";
+  window.__autoDone=false;
+  var T0=performance.now();
+  var at=function(ms,fn){ setTimeout(fn, ms-(performance.now()-T0)) };
+
+  // step 1 — walk the highlight down the ledger so it is not frozen
+  si=0; showStep();
+  [7000,11000,15000,19000].forEach(function(ms,k){
+    at(ms,function(){ INSPECT=REC[[1,4,6,2][k]]; paint() });
+  });
+
+  // step 2 — settle back onto the exchange under discussion
+  at(22450,function(){ si=1; showStep(); });
+  at(30000,function(){ INSPECT=REC[5]; paint() });
+  at(37000,function(){ INSPECT=REC[0]; paint() });
+
+  // step 3 — enter still looking settled, THEN pull the key away
+  at(44830,function(){ si=2; showStep(); S.key=true; paint(); });
+  at(49500,function(){ S.key=false; paint(); });
+  at(60000,function(){ S.key=true;  paint(); });   // put it back, briefly
+  at(63000,function(){ S.key=false; paint(); });   // and take it away again
+
+  // step 4 — hold at today, then run the clock
+  at(70200,function(){ si=3; showStep(); S.day=0; paint(); });
+  at(73400,function(){
+    var start=performance.now(), span=7000;
+    (function tick(){
+      var p=Math.min(1,(performance.now()-start)/span);
+      S.day=Math.round(p*35); paint();
+      if(p<1) requestAnimationFrame(tick);
+    })();
+  });
+  at(97300,function(){ window.__autoDone=true; });
+}
 })();
 </script>
 </body>
