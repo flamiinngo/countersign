@@ -4,7 +4,9 @@
 
 Submitted to the Arkiv *What can YOU [ ARKIV ] ?* Ideathon 2026 — **Other (open lane)**.
 
-This is an idea and its Arkiv data model. Nothing is deployed.
+**▶ [Walk through a dispute](https://flamiinngo.github.io/countersign/demo.html)** — four steps, one button. Watch a dispute get settled, then watch it collapse when the receiver's key was never registered upfront.
+
+This is an idea and its Arkiv data model. Nothing is deployed on-chain, and the walkthrough is a simulation running in the browser.
 
 ![The Countersign flow: the receiver registers a signing key before any traffic; the sender writes a SendProof on send and a ReceiptProof when a signed response returns; paired proofs settle and expire together, while an unmatched SendProof keeps extending itself.](countersign-flow.png)
 
