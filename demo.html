@@ -381,12 +381,20 @@ $("clock").oninput=function(){S.day=+this.value;paint()};
 $("swK").onchange=function(){S.key=this.checked;paint()};
 $("swE").onchange=function(){S.extend=this.checked;paint()};
 
-/* allow ?step=N so a step can be linked to, or captured */
+/* ?step=N links to a step; ?day= and ?key= override its state, for capture */
 var qs=(location.search.match(/[?&]step=(\d+)/)||[])[1];
 if(qs){ si=Math.max(0,Math.min(STEPS.length-1,parseInt(qs,10)-1)); }
 if(/[?&]clean=1/.test(location.search)){ document.querySelector(".tour .nav").style.visibility="hidden"; }
 
 showStep();
+
+var qd=(location.search.match(/[?&]day=(\d+)/)||[])[1];
+var qk=(location.search.match(/[?&]key=([01])/)||[])[1];
+if(qd!==undefined||qk!==undefined){
+  if(qd!==undefined) S.day=parseInt(qd,10);
+  if(qk!==undefined) S.key=(qk==="1");
+  paint();
+}
 })();
 </script>
 </body>
